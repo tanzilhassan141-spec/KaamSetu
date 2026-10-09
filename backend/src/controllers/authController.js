@@ -1,3 +1,5 @@
+
+const bcrypt = require("bcryptjs");
 const User = require("../models/User");
 
 const registerUser = async (req, res) => {
@@ -12,26 +14,50 @@ const registerUser = async (req, res) => {
       });
     }
 
+    // Validate password length
+    if (password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be at least 6 characters long",
+      });
+    }
+
+    // Validate user role
+    if (role && !["user", "provider"].includes(role)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid user role",
+      });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+
     // Check if user already exists
-    const existingUser = await User.findOne({ email });
+    const existingUser = await User.findOne({
+      email: normalizedEmail,
+    });
 
     if (existingUser) {
-      return res.status(400).json({
+      return res.status(409).json({
         success: false,
         message: "User already exists with this email",
       });
     }
 
-    // Create user
+    // Hash password before saving
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Save user with hashed password
     const user = await User.create({
-      name,
-      email,
-      password,
-      phone,
+      name: name.trim(),
+      email: normalizedEmail,
+      password: hashedPassword,
+      phone: phone.trim(),
       role: role || "user",
     });
 
-    res.status(201).json({
+    // Never return the password or password hash
+    return res.status(201).json({
       success: true,
       message: "User registered successfully",
       user: {
@@ -45,7 +71,7 @@ const registerUser = async (req, res) => {
   } catch (error) {
     console.error("Registration error:", error.message);
 
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Server error",
     });
